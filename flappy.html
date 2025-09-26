@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Hành trình của Bé Dy</title>
+  <style>
+    canvas {
+      background: #70c5ce;
+      display: block;
+      margin: auto;
+      touch-action: manipulation;
+    }
+    #restartBtn {
+      display: none;
+      margin: 20px auto;
+      padding: 10px 20px;
+      font-size: 18px;
+      background-color: #2e8b57;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    #restartBtn:hover {
+      background-color: #246b45;
+    }
+  </style>
+</head>
+<body>
+<canvas id="gameCanvas" width="320" height="480"></canvas>
+<button id="restartBtn" onclick="restartGame()">Chơi lại</button>
+<script>
+  const canvas = document.getElementById("gameCanvas");
+  const ctx = canvas.getContext("2d");
+  const restartBtn = document.getElementById("restartBtn");
+
+  let birdY, birdVelocity, pipes, frame, score, companions, shield, shieldBreakFrames;
+  let showArrivalText = false;
+  let arrivalTextTimer = 0;
+
+  const gravity = 0.125;
+  const jumpStrength = -3.5;
+  const pipeWidth = 50;
+  const pipeGap = 120;
+  const pipeSpacing = 800;
+
+  let gameOver = false;
+  let countdown = 5;
+  let gameStarted = false;
+
+  function initGame() {
+    birdY = 150;
+    birdVelocity = 0;
+    pipes = [];
+    companions = [];
+    frame = 0;
+    score = 0;
+    shield = 0;
+    shieldBreakFrames = 0;
+    showArrivalText = false;
+    arrivalTextTimer = 0;
+    gameOver = false;
+    gameStarted = false;
+    restartBtn.style.display = "none";
+  }
+
+  function flap() {
+    if (gameStarted && !gameOver) {
+      birdVelocity = jumpStrength;
+    } else if (gameOver) {
+      restartGame();
+    }
+  }
+
+  document.addEventListener("keydown", (e) => {
+    if (e.code === "Space") flap();
+  });
+
+  canvas.addEventListener("touchstart", flap);
+  canvas.addEventListener("mousedown", flap);
+
+  function getRandomColor() {
+    const colors = ["red", "blue", "purple", "orange", "green"];
+    return colors[Math.floor(Math.random() * colors.length)];
+  }
+
+  function drawBird() {
+    ctx.fillStyle = "yellow";
+    ctx.fillRect(50, birdY, 20, 20);
+
+    companions.forEach((companion, index) => {
+      ctx.fillStyle = companion.color;
+      ctx.fillRect(50 - (index + 1) * 25, birdY + companion.offsetY, 20, 20);
+    });
+
+    if (shield > 0) {
+      ctx.strokeStyle = "cyan";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(60, birdY + 10, 14, 0, 2 * Math.PI);
+      ctx.stroke();
+    }
+
+    if (shieldBreakFrames > 0) {
+      ctx.strokeStyle = "white";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(60, birdY + 10, 18, 0, 2 * Math.PI);
+      ctx.stroke();
+      shieldBreakFrames--;
+    }
+  }
+
+  function drawPipe(pipe) {
+    ctx.fillStyle = "#2e8b57";
+    ctx.fillRect(pipe.x, 0, pipeWidth, pipe.top);
+    ctx.fillRect(pipe.x, pipe.top + pipeGap, pipeWidth, canvas.height);
+    ctx.strokeStyle = "#004d2e";
+    ctx.lineWidth = 3;
+    ctx.strokeRect(pipe.x, 0, pipeWidth, pipe.top);
+    ctx.strokeRect(pipe.x, pipe.top + pipeGap, pipeWidth, canvas.height);
+  }
+
+  function drawPipes() {
+    pipes.forEach(drawPipe);
+  }
+
+  function updatePipes() {
+    if (pipes.length === 0 || canvas.width - pipes[pipes.length - 1].x >= pipeSpacing) {
+      let top = Math.random() * 200 + 50;
+      pipes.push({ x: canvas.width, top, scored: false });
+    }
+    pipes.forEach(pipe => pipe.x -= 0.5);
+    pipes = pipes.filter(pipe => pipe.x + pipeWidth > 0);
+  }
+
+  function checkCollision() {
+    pipes.forEach(pipe => {
+      const hitPipe = 50 < pipe.x + pipeWidth && 70 > pipe.x &&
+                      (birdY < pipe.top || birdY > pipe.top + pipeGap);
+
+      if (hitPipe) {
+        if (shield > 0) {
+          shield--;
+          shieldBreakFrames = 10;
+          pipe.x = -pipeWidth;
+        } else {
+          gameOver = true;
+        }
+      }
+
+      if (!pipe.scored && pipe.x + pipeWidth < 50) {
+        score += 1;
+        pipe.scored = true;
+
+        if (score % 5 === 0) {
+          companions.push({ offsetY: Math.random() * 40 - 20, color: getRandomColor() });
+          shield++;
+          showArrivalText = true;
+          arrivalTextTimer = 60;
+        }
+      }
+    });
+
+    if (birdY > canvas.height || birdY < 0) gameOver = true;
+  }
+
+  function drawScore() {
+    ctx.fillStyle = "black";
+    ctx.font = "20px Arial";
+    ctx.fillText("Score: " + score, 10, 25);
+    if (shield > 0) {
+      ctx.fillStyle = "cyan";
+      ctx.font = "14px Arial";
+      ctx.fillText("Giáp: " + shield, 10, 45);
+    }
+  }
+
+  function centerText(text, y, size = "30px", color = "black") {
+    ctx.fillStyle = color;
+    ctx.font = size + " Arial";
+    const textWidth = ctx.measureText(text).width;
+    ctx.fillText(text, (canvas.width - textWidth) / 2, y);
+  }
+
+  function gameLoop() {
+    if (gameOver) {
+      centerText("Game Over", canvas.height / 3, "30px", "red");
+      centerText("Cố lên Trúc Vy!", canvas.height / 3 + 40, "24px", "purple");
+      restartBtn.style.display = "block";
+      return;
+    }
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    birdY += birdVelocity;
+    birdVelocity += gravity;
+
+    drawBird();
+    updatePipes();
+    drawPipes();
+    checkCollision();
+    drawScore();
+
+    if (showArrivalText && arrivalTextTimer > 0) {
+      centerText("Đi Kay đến!", canvas.height / 3, "24px", "blue");
+      arrivalTextTimer--;
+      if (arrivalTextTimer === 0) {
+        showArrivalText = false;
+      }
+    }
+
+    frame++;
+    requestAnimationFrame(gameLoop);
+  }
+
+  function startCountdown() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    centerText("Hành trình của Bé Dy", canvas.height / 3, "28px", "black");
+    centerText("Starting in " + countdown, canvas.height / 3 + 40, "24px", "black");
+    countdown--;
+    if (countdown >= 0) {
+      setTimeout(startCountdown, 1000);
+    } else {
+      gameStarted = true;
+      gameLoop();
+    }
+  }
+
+  function restartGame() {
+    initGame();
+    countdown = 5;
+    startCountdown();
+  }
+
+  initGame();
+  startCountdown();
+</script>
+</body>
+</html>
